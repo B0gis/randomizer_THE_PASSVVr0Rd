@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Мой пароль-генератор</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="box">
+    <h2>Генератор паролей</h2>
+
+    <div id="length-display">Длина: 12</div>
+    <input type="range" id="length" min="4" max="100" value="12">
+
+    <div class="options">
+        <div class="option-item">
+            <label>
+                <input type="checkbox" id="uppercase"> Заглавные буквы (A-Z)
+            </label>
+        </div>
+        <div class="option-item">
+            <label>
+                <input type="checkbox" id="numbers"> Цифры (0-9)
+            </label>
+        </div>
+        <div class="option-item">
+            <label>
+                <input type="checkbox" id="symbols"> Спецсимволы (!@#$% и т.д.)
+            </label>
+        </div>
+    </div>
+
+    <button onclick="generatePassword()">Создать пароль</button>
+
+    <div id="result"></div>
+</div>
+
+<script>
+    // обновляю длину при движении ползунка
+    document.getElementById('length').addEventListener('input', function() {
+        document.getElementById('length-display').innerText = 'Длина: ' + this.value;
+    });
+
+    function generatePassword() {
+        const length = document.getElementById('length').value;
+        const uppercase = document.getElementById('uppercase').checked;
+        const numbers = document.getElementById('numbers').checked;
+        const symbols = document.getElementById('symbols').checked;
+
+        fetch('/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                length: length,
+                uppercase: uppercase,
+                numbers: numbers,
+                symbols: symbols
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('result').innerText = data.password;
+        })
+        .catch(err => {
+            document.getElementById('result').innerText = 'Ошибка...';
+            console.log('Ошибка:', err);
+        });
+    }
+</script>
+
+</body>
+</html>
