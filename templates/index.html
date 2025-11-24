@@ -1,74 +1,97 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Мой пароль-генератор</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-
-<div class="box">
-    <h2>Генератор паролей</h2>
-
-    <div id="length-display">Длина: 12</div>
-    <input type="range" id="length" min="4" max="100" value="12">
-
-    <div class="options">
-        <div class="option-item">
-            <label>
-                <input type="checkbox" id="uppercase"> Заглавные буквы (A-Z)
-            </label>
-        </div>
-        <div class="option-item">
-            <label>
-                <input type="checkbox" id="numbers"> Цифры (0-9)
-            </label>
-        </div>
-        <div class="option-item">
-            <label>
-                <input type="checkbox" id="symbols"> Спецсимволы (!@#$% и т.д.)
-            </label>
-        </div>
-    </div>
-
-    <button onclick="generatePassword()">Создать пароль</button>
-
-    <div id="result"></div>
-</div>
-
 <script>
-    // обновляю длину при движении ползунка
-    document.getElementById('length').addEventListener('input', function() {
-        document.getElementById('length-display').innerText = 'Длина: ' + this.value;
-    });
-
-    function generatePassword() {
-        const length = document.getElementById('length').value;
-        const uppercase = document.getElementById('uppercase').checked;
-        const numbers = document.getElementById('numbers').checked;
-        const symbols = document.getElementById('symbols').checked;
-
-        fetch('/generate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                length: length,
-                uppercase: uppercase,
-                numbers: numbers,
-                symbols: symbols
-            })
-        })
+function loadPasswords() {
+    fetch('/passwords')
         .then(res => res.json())
         .then(data => {
-            document.getElementById('result').innerText = data.password;
+            const container = document.getElementById('saved-passwords');
+            container.innerHTML = '';
+            if (data.passwords && data.passwords.length > 0) {
+                // Используем entry.id из базы данных вместо индекса
+                data.passwords.forEach(entry => {
+                    const div = document.createElement('div');
+                    div.innerHTML = `
+                        <div id="record-${entry.id}">
+                            <div>
+                                <button onclick="editRecord(${entry.id})">Редактировать</button>
+                                <button onclick="deleteRecord(${entry.id})">Удалить</button>
+                                <strong>Сайт:</strong> <span class="site">${entry.site}</span>
+                            </div>
+                            <div>
+                                <strong>Логин:</strong> <span class="login">${entry.login}</span>
+                            </div>
+                            <div>
+                                <strong>Пароль:</strong> <span class="password">${entry.password}</span>
+                            </div>
+                            <div>
+                                <strong>Время:</strong> ${entry.time}
+                            </div>
+                            <div style="display:none;" id="edit-form-${entry.id}">
+                                <input type="text" id="edit-site-${entry.id}" value="${entry.site}">
+                                <input type="text" id="edit-login-${entry.id}" value="${entry.login}">
+                                <input type="text" id="edit-password-${entry.id}" value="${entry.password}">
+                                <button onclick="saveRecord(${entry.id})">Сохранить</button>
+                                <button onclick="cancelEdit(${entry.id})">Отмена</button>
+                            </div>
+                        </div>
+                        <hr>
+                    `;
+                    container.appendChild(div);
+                });
+            } else {
+                container.innerText = 'Нет сохранённых паролей.';
+            }
         })
         .catch(err => {
-            document.getElementById('result').innerText = 'Ошибка...';
-            console.log('Ошибка:', err);
+            document.getElementById('saved-passwords').innerText = 'Ошибка загрузки паролей';
+            console.log(err);
         });
-    }
-</script>
+}
 
-</body>
-</html>
+function deleteRecord(id) {
+    fetch('/delete_password', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: id})
+    }).then(res => res.json())
+      .then(data => {
+        if (data.status === 'ok') {
+            loadPasswords();
+        } else {
+            alert('Ошибка удаления: ' + (data.error || ''));
+        }
+    });
+}
+
+function editRecord(id) {
+    // Скрываем все другие открытые формы редактирования
+    document.querySelectorAll('[id^="edit-form-"]').forEach(form => form.style.display = 'none');
+    // Показываем нужную форму
+    document.getElementById(`record-${id}`).querySelector(`#edit-form-${id}`).style.display = 'block';
+}
+
+function cancelEdit(id) {
+    document.getElementById(`record-${id}`).querySelector(`#edit-form-${id}`).style.display = 'none';
+}
+
+function saveRecord(id) {
+    const site = document.getElementById(`edit-site-${id}`).value;
+    const login = document.getElementById(`edit-login-${id}`).value;
+    const password = document.getElementById(`edit-password-${id}`).value;
+
+    fetch('/edit_password', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: id, site: site, login: login, password: password})
+    }).then(res => res.json())
+      .then(data => {
+        if (data.status === 'ok') {
+            loadPasswords();
+        } else {
+            alert('Ошибка сохранения: ' + (data.error || ''));
+        }
+    });
+}
+
+// Загружаем пароли при загрузке страницы
+window.onload = loadPasswords;
+</script>

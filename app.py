@@ -1,64 +1,234 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+import sqlite3
+import string
 import random
-import os
+from datetime import datetime
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
 
+# --- Конфигурация приложения ---
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
-users = {
-    "123": "123"
-}
+app.secret_key = 'your_very_secret_key'  # Рекомендуется сменить на случайную строку
+DATABASE = 'database.db'
+
+# --- Функции для работы с БД ---
+
+def get_db_connection():
+    """Устанавливает соединение с базой данных."""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row  # Позволяет обращаться к колонкам по имени
+    return conn
+
+def init_db():
+    """Инициализирует базу данных и создает таблицы, если их нет."""
+    conn = get_db_connection()
+    # Создаем таблицу пользователей
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+    ''')
+    # Создаем таблицу паролей
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS passwords (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            site TEXT NOT NULL,
+            login TEXT NOT NULL,
+            password TEXT NOT NULL,
+            time TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    conn.commit()
+    conn.close()
+    print("База данных инициализирована.")
+
+# --- Маршруты (Routes) ---
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+
+        if not username or not password:
+            return render_template('register.html', error='Заполните все поля')
+
+        # Хешируем пароль для безопасного хранения
+        hashed_password = generate_password_hash(password)
+
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+                (username, hashed_password)
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.close()
+            return render_template('register.html', error='Пользователь существует')
+        finally:
+            conn.close()
+
+        # Автоматический вход после регистрации
+        user = get_db_connection().execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        session['username'] = user['username']
+        session['user_id'] = user['id']
+        session['role'] = 'user'
+        
+        return redirect(url_for('index'))
+
+    return render_template('register.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        if username in users and users[username] == password:
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+
+        conn = get_db_connection()
+        user = conn.execute(
+            'SELECT * FROM users WHERE username = ?', (username,)
+        ).fetchone()
+        conn.close()
+
+        # Проверяем, существует ли пользователь и совпадает ли хеш пароля
+        if user and check_password_hash(user['password_hash'], password):
+            session['username'] = user['username']
+            session['user_id'] = user['id']
             session['role'] = 'user'
-            return redirect(url_for('main_page'))
+            return redirect(url_for('index'))
         else:
-            return render_template('login.html', error="Неверный логин или пароль")
+            return render_template('login.html', error='Неверный логин или пароль')
+
     return render_template('login.html')
 
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
 @app.route('/')
-def main_page():
+def index():
     if 'role' not in session:
         return redirect(url_for('login'))
     return render_template('index.html')
 
+
 @app.route('/generate', methods=['POST'])
-def make_pass():
+def generate():
+    if 'role' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    j = request.get_json() or {}
+    try:
+        L = int(j.get('length', 12))
+    except (ValueError, TypeError):
+        L = 12
+    L = max(L, 1)
+
+    chars = string.ascii_lowercase
+    if j.get('uppercase'):
+        chars += string.ascii_uppercase
+    if j.get('numbers'):
+        chars += string.digits
+    if j.get('symbols'):
+        chars += '!@#$%^&*()_+-=[]{}|;:,.<>?'
+    
+    pwd = ''.join(random.choice(chars) for _ in range(L))
+    site = j.get('site', '')
+    login = j.get('login', '')
+    user_id = session.get('user_id')
+
+    if user_id and site and login:
+        conn = get_db_connection()
+        conn.execute(
+            'INSERT INTO passwords (user_id, site, login, password, time) VALUES (?, ?, ?, ?, ?)',
+            (user_id, site, login, pwd, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        )
+        conn.commit()
+        conn.close()
+
+    return jsonify({'password': pwd})
+
+
+@app.route('/passwords')
+def passwords():
     if 'role' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    data = request.get_json()
-    try:
-        pass_len = int(data.get('length', 12))
-    except:
-        pass_len = 8
+    user_id = session.get('user_id')
+    if not user_id:
+         return jsonify({'error': 'User not found'}), 401
 
-    if pass_len < 4:
-        pass_len = 4
-    if pass_len > 100:
-        pass_len = 100
+    conn = get_db_connection()
+    passwords_rows = conn.execute(
+        'SELECT id, site, login, password, time FROM passwords WHERE user_id = ? ORDER BY id DESC',
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    
+    # Преобразуем результат в список словарей
+    user_passwords = [dict(row) for row in passwords_rows]
+    return jsonify({'passwords': user_passwords})
 
-    use_upper = data.get('uppercase', False)
-    use_digits = data.get('numbers', False)
-    use_symbols = data.get('symbols', False)
 
-    chars = 'abcdefghijklmnopqrstuvwxyz'
-    if use_upper:
-        chars += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    if use_digits:
-        chars += '0123456789'
-    if use_symbols:
-        chars += '!@#$%^&*()_+-=[]{}|;:,.<>?'
+@app.route('/delete_password', methods=['POST'])
+def delete_password():
+    if 'role' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
 
-    if not chars:
-        chars = 'abcdefghijklmnopqrstuvwxyz'
+    user_id = session.get('user_id')
+    record_id = request.json.get('id')
 
-    password = ''.join(random.choice(chars) for _ in range(pass_len))
-    return jsonify({'password': password})
+    if user_id and record_id is not None:
+        conn = get_db_connection()
+        # Пользователь может удалять только свои пароли
+        cursor = conn.execute(
+            'DELETE FROM passwords WHERE id = ? AND user_id = ?',
+            (record_id, user_id)
+        )
+        conn.commit()
+        conn.close()
+        if cursor.rowcount > 0: # Проверяем, была ли удалена строка
+            return jsonify({'status': 'ok'})
 
+    return jsonify({'error': 'Запись не найдена или отказано в доступе'}), 404
+
+
+@app.route('/edit_password', methods=['POST'])
+def edit_password():
+    if 'role' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user_id = session.get('user_id')
+    j = request.json
+    record_id = j.get('id')
+    new_site = j.get('site')
+    new_login = j.get('login')
+    new_password = j.get('password')
+
+    if user_id and record_id is not None:
+        conn = get_db_connection()
+        cursor = conn.execute(
+            '''UPDATE passwords SET site = ?, login = ?, password = ?
+               WHERE id = ? AND user_id = ?''',
+            (new_site, new_login, new_password, record_id, user_id)
+        )
+        conn.commit()
+        conn.close()
+        if cursor.rowcount > 0:
+            return jsonify({'status': 'ok'})
+
+    return jsonify({'error': 'Запись не найдена или отказано в доступе'}), 404
+
+
+# --- Запуск приложения ---
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    init_db()  # Инициализируем БД при первом запуске
+    app.run(host='0.0.0.0', port=8080, debug=True)

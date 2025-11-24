@@ -1,0 +1,22 @@
+{
+  "users": {
+    "123": "123"
+  },
+  "passwords": {
+    "123": [
+      {
+        "password": "tvzewozlxkps",
+        "time": "2025-10-21 17:43:09",
+        "site": "vk.com",
+        "login": "login"
+      },
+      {
+        "password": "tzehhxdopjdj",
+        "time": "2025-10-21 17:43:42",
+        "site": "wadawd",
+        "login": "awdawdawdawd"
+      }
+    ]
+  },
+  "site": {}
+}
