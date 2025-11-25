@@ -24,7 +24,7 @@
 ## 🛠️ Установка
 
 
-### Клонируйте репозиторий на ваш локальный компьютер:
+### 1\.Клонируйте репозиторий на ваш локальный компьютер:
 
 ```bash
 git clone [https://github.com/B0gis/randomizer_THE_PASSVVr0Rd.git](https://github.com/B0gis/randomizer_THE_PASSVVr0Rd.git)
