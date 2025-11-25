@@ -30,12 +30,13 @@
 ```bash
 git clone [https://github.com/B0gis/randomizer_THE_PASSVVr0Rd.git](https://github.com/B0gis/randomizer_THE_PASSVVr0Rd.git)
 cd randomizer_THE_PASSVVr0Rd
+```bash
 
 ### 2\. Зависимости (если это Python-скрипт)
 
 Для запуска может потребоваться Python 3.x. Если скрипт использует какие-либо сторонние библиотеки, их можно установить с помощью pip:
 
-# Если есть файл requirements.txt
+# В файле requirements.txt сохранены все библиотеки, для их установки введите
 pip install -r requirements.txt
 
 # Или, если вы знаете конкретные библиотеки, например
