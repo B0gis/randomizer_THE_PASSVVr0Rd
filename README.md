@@ -30,7 +30,7 @@
 ```bash
 git clone [https://github.com/B0gis/randomizer_THE_PASSVVr0Rd.git](https://github.com/B0gis/randomizer_THE_PASSVVr0Rd.git)
 cd randomizer_THE_PASSVVr0Rd
-
+```
 
 ### 2\. Зависимости (если это Python-скрипт)
 
