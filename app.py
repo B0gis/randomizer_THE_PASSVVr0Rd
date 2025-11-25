@@ -5,23 +5,23 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# --- Конфигурация приложения ---
+
 app = Flask(__name__)
-app.secret_key = 'your_very_secret_key'  # Рекомендуется сменить на случайную строку
+app.secret_key = 'your_very_secret_key'
 DATABASE = 'database.db'
 
-# --- Функции для работы с БД ---
+
 
 def get_db_connection():
-    """Устанавливает соединение с базой данных."""
+
     conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row  # Позволяет обращаться к колонкам по имени
+    conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    """Инициализирует базу данных и создает таблицы, если их нет."""
+
     conn = get_db_connection()
-    # Создаем таблицу пользователей
+
     conn.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,7 +29,7 @@ def init_db():
             password_hash TEXT NOT NULL
         )
     ''')
-    # Создаем таблицу паролей
+
     conn.execute('''
         CREATE TABLE IF NOT EXISTS passwords (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +45,6 @@ def init_db():
     conn.close()
     print("База данных инициализирована.")
 
-# --- Маршруты (Routes) ---
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -56,7 +55,7 @@ def register():
         if not username or not password:
             return render_template('register.html', error='Заполните все поля')
 
-        # Хешируем пароль для безопасного хранения
+
         hashed_password = generate_password_hash(password)
 
         conn = get_db_connection()
@@ -72,7 +71,6 @@ def register():
         finally:
             conn.close()
 
-        # Автоматический вход после регистрации
         user = get_db_connection().execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         session['username'] = user['username']
         session['user_id'] = user['id']
@@ -95,7 +93,7 @@ def login():
         ).fetchone()
         conn.close()
 
-        # Проверяем, существует ли пользователь и совпадает ли хеш пароля
+
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = user['username']
             session['user_id'] = user['id']
@@ -173,7 +171,7 @@ def passwords():
     ).fetchall()
     conn.close()
     
-    # Преобразуем результат в список словарей
+
     user_passwords = [dict(row) for row in passwords_rows]
     return jsonify({'passwords': user_passwords})
 
@@ -188,7 +186,7 @@ def delete_password():
 
     if user_id and record_id is not None:
         conn = get_db_connection()
-        # Пользователь может удалять только свои пароли
+
         cursor = conn.execute(
             'DELETE FROM passwords WHERE id = ? AND user_id = ?',
             (record_id, user_id)
@@ -228,7 +226,7 @@ def edit_password():
     return jsonify({'error': 'Запись не найдена или отказано в доступе'}), 404
 
 
-# --- Запуск приложения ---
+
 if __name__ == '__main__':
-    init_db()  # Инициализируем БД при первом запуске
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    init_db()
+    app.run(host='0.0.0.0', port=8000, debug=True)
